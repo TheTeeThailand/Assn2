@@ -8,7 +8,6 @@ from sensor_msgs.msg import Image
 from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge
 import cv2
-import math
 
 
 class RedBall(Node):
@@ -28,7 +27,6 @@ class RedBall(Node):
         self.br = CvBridge()
         self.target_publisher = self.create_publisher(Image, 'target_redball', 10)
         self.twist_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
-        self.last_x = None
 
     def listener_callback(self, msg):
         print("📸 Received image")
@@ -60,16 +58,9 @@ class RedBall(Node):
             area = cv2.contourArea(largest_contour)
             ((x, y), radius) = cv2.minEnclosingCircle(largest_contour)
 
-            # Circularity = 4π * Area / (Perimeter)^2
-            perimeter = cv2.arcLength(largest_contour, True)
-            if perimeter == 0:
-                circularity = 0
-            else:
-                circularity = 4 * np.pi * area / (perimeter * perimeter)
+            print(f"🔍 radius={radius:.1f}, area={area:.1f}")
 
-            print(f"🔍 radius={radius:.1f}, area={area:.1f}, circularity={circularity:.2f}")
-
-            if radius > 5 and area > 150 and circularity > 0.5:
+            if radius > 5 and area > 150:
                 center = (int(x), int(y))
                 circled = cv2.circle(frame, center, int(radius), (0, 255, 0), 3)
 
@@ -78,10 +69,10 @@ class RedBall(Node):
                 print(f"🎯 Ball detected at: x={int(x)}, y={int(y)}, radius={int(radius)}")
                 return
 
-        self.last_x = None
-        print("❌ No red ball in this frame")
-        self.get_logger().info('no ball detected')
-
+                # Not detected → set to None and report
+                self.last_x = None
+                print("❌ No red ball in this frame")
+            self.get_logger().info('no ball detected')
 
 class CreateRedBallEnv(gym.Env):
     metadata = {"render_modes": ["human"], "render_fps": 30}
