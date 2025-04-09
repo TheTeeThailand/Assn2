@@ -1,0 +1,3 @@
+[gymnasium.envs]
+aisd_examples/CreateRedBall-v0 = aisd_examples.envs.create_red_ball:CreateRedBallEnv
+
