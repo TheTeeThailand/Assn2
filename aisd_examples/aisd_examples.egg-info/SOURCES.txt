@@ -8,3 +8,4 @@ aisd_examples.egg-info/requires.txt
 aisd_examples.egg-info/top_level.txt
 aisd_examples/envs/__init__.py
 aisd_examples/envs/create_red_ball.py
+aisd_examples/envs/register_envs.py

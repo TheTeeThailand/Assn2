@@ -56,20 +56,15 @@ class RedBall(Node):
         contours, _ = cv2.findContours(morphed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         if contours:
-            largest_contour = max(contours, key=cv2.contourArea)
-            area = cv2.contourArea(largest_contour)
-            ((x, y), radius) = cv2.minEnclosingCircle(largest_contour)
+            largest = max(contours, key=cv2.contourArea)
+            area = cv2.contourArea(largest)
+            ((x, y), radius) = cv2.minEnclosingCircle(largest)
+            perimeter = cv2.arcLength(largest, True)
+            circularity = 4 * math.pi * area / (perimeter * perimeter + 1e-5) if perimeter > 0 else 0
 
-            # Circularity = 4π * Area / (Perimeter)^2
-            perimeter = cv2.arcLength(largest_contour, True)
-            if perimeter == 0:
-                circularity = 0
-            else:
-                circularity = 4 * np.pi * area / (perimeter * perimeter)
+            print(f"🔍 radius={radius:.1f}, area={area:.1f}, circularity={circularity:.2f}, x={int(x)}, y={int(y)}")
 
-            print(f"🔍 radius={radius:.1f}, area={area:.1f}, circularity={circularity:.2f}")
-
-            if radius > 5 and area > 150 and circularity > 0.5:
+            if radius > 5 and area > 150 and circularity > 0.7 and 20 < x < 620 and 20 < y < 460:
                 center = (int(x), int(y))
                 circled = cv2.circle(frame, center, int(radius), (0, 255, 0), 3)
 
@@ -88,30 +83,50 @@ class CreateRedBallEnv(gym.Env):
 
     def __init__(self, render_mode=None):
         self.observation_space = spaces.Discrete(640)
-        self.action_space = spaces.Discrete(640)
+        self.action_space = spaces.Discrete(3)  # 0 = left, 1 = right, 2 = no move
         self.step_count = 0
 
         rclpy.init()
         self.redball = RedBall()
+        self.cmd_pub = self.redball.create_publisher(Twist, '/cmd_vel', 10)
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         self.step_count = 0
-        return self.observation_space.sample(), {}
+        self.redball.last_x = None
+        rclpy.spin_once(self.redball, timeout_sec=0.5)
+        return 0, {}  # Default state if no ball
 
     def step(self, action):
         self.step_count += 1
 
-        rclpy.spin_once(self.redball)
+        twist = Twist()
+        if action == 0:
+            twist.angular.z = 0.5   # rotate left
+        elif action == 1:
+            twist.angular.z = -0.5  # rotate right
+        else:
+            twist.angular.z = 0.0   # stay
+
+        self.cmd_pub.publish(twist)
+
+        rclpy.spin_once(self.redball, timeout_sec=0.5)
         print(f"[STEP {self.step_count}]")
 
-        observation = self.observation_space.sample()
-        reward = 0
+        if self.redball.last_x is not None:
+            obs = int(self.redball.last_x)
+            reward = 1.0 - abs(obs - 320) / 320.0
+            print(f"🎯 RL obs={obs}, reward={reward:.2f}")
+        else:
+            obs = 0
+            reward = -1.0
+            print("❌ No red ball detected for RL")
+
         terminated = self.step_count >= 100
         truncated = False
         info = {}
 
-        return observation, reward, terminated, truncated, info
+        return obs, reward, terminated, truncated, info
 
     def render(self):
         pass
